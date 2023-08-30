@@ -1,0 +1,17 @@
+cipher: katan32BCT
+startRound: 90
+endRound: -1
+switchRounds: 4
+threshold: 5
+eachRoundMaxTime: 24
+eachRoundMaxValid: 5
+wordsize: 32
+sweight: 0
+endweight: 1000
+iterative: False
+boolector: False
+dot: None
+latex: None
+nummessages: 1
+timelimit: -1
+offset: 0
