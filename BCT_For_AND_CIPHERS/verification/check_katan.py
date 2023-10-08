@@ -16,7 +16,7 @@ def verify(in_diff, out_diff, rounds, counter, offset=0):
     counter.value = 0
     test_n = 2**WEIGHT
     print("\n{}, INPUT_DIFF:{}, OUTPUT_DIFF:{}, the number of test data: {}".format(CIPHER_NAME, hex(in_diff), hex(out_diff), test_n))
-    key = random.randint(0, 2**32)
+    key = random.randint(0, 2**80)
     result = 0
     task_list = []
     seg_list = util.split_task(0, test_n, MAX_PROCESSES)
