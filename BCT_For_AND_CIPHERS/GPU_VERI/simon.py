@@ -183,8 +183,9 @@ def cpu_task():
         rounds = dd[4]
         boomerang_weight = dd[5]
         rectangle_weight = dd[6]
+        switch_len = dd[7]
 
-        key = random.randint(0, 2 ** key_size)
+        key = random.randint(0, 2 ** 32)
         ######################
         result = numpy.zeros((total_threads,), dtype=numpy.uint32)
         temp_list = numpy.array([[0 for _ in range(32)] for _ in range(total_threads)], dtype=numpy.uint32)
@@ -203,11 +204,11 @@ def cpu_task():
         if res == 0:
             tip = "Invalid"
         else:
-            tip = math.log2(res / 2 ** 32)
+            tip = math.log2(res / 2 ** 31)
 
-        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n\tKey:{7}\n".format(
+        save_str = "CIPHER:{0}, INPUT_DIFF:{1}, OUTPUT_DIFF:{2}, rounds:{6}, sw_len:{8}\n\tBOOMERANG:{3},RECTANGLE:{4},ACTUAL_WEIGHT:{5}\n\tKey:{7}\n".format(
             CIPHER_NAME, hex(input_diff),
-            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds, hex(key))
+            hex(output_diff), boomerang_weight, rectangle_weight, tip, rounds, hex(key), switch_len)
         save_file.write(save_str)
         save_file.flush()
         print(save_str)

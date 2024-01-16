@@ -12,6 +12,7 @@ The part of this repository is about the boomerang attacks on AND-based ciphers.
 1. KATAN32: ```python3 cluster_search.py --inputfile katan32.yml```
 2. SIMON32/64: ```python3 cluster_search.py --inputfile simon32.yml```
 3. The results are in ```/xxxx_results``` folders.
+4. In folder ```GPU_VERI```, there are GPU-CHECKING programs.
 
 
 Oringal repository: https://github.com/kste/cryptosmt

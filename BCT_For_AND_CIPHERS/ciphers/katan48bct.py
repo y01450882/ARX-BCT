@@ -29,34 +29,24 @@ class katan48(AbstractCipher):
         x1 = x & 0x1
         return x0 & x1
 
-    def small_vari(self, x_in, x_out, in_index_list: set, out_index_list: set, offset=0):
+    def small_vari(self, x_in, x_out, offset=0):
         variables = ["{0}[{1}:{1}]".format(x_in, 29 + 7 + offset),
-                     "{0}[{1}:{1}]".format(x_in, 29 + 15 + offset),
                      "{0}[{1}:{1}]".format(x_out, 29 + 7 + 1 + offset),
+                     "{0}[{1}:{1}]".format(x_in, 29 + 15 + offset),
                      "{0}[{1}:{1}]".format(x_out, 29 + 15 + 1 + offset)]
-        in_index_list.add(29 + 7 + offset)
-        in_index_list.add(29 + 15 + offset)
-        out_index_list.add(29 + 7 + 1 + offset)
-        out_index_list.add(29 + 15 + 1 + offset)
         return variables
 
-    def big_vari(self, x_in, x_out, in_index_list: set, out_index_list: set, offset=0):
+    def big_vari(self, x_in, x_out, offset=0):
         variables = ["{0}[{1}:{1}]".format(x_in, 6 + offset),
-                     "{0}[{1}:{1}]".format(x_in, 15 + offset),
-                     "{0}[{1}:{1}]".format(x_in, 13 + offset),
-                     "{0}[{1}:{1}]".format(x_in, 21 + offset),
                      "{0}[{1}:{1}]".format(x_out, 6 + 1 + offset),
+                     "{0}[{1}:{1}]".format(x_in, 15 + offset),
                      "{0}[{1}:{1}]".format(x_out, 15 + 1 + offset),
+
+                     "{0}[{1}:{1}]".format(x_in, 13 + offset),
                      "{0}[{1}:{1}]".format(x_out, 13 + 1 + offset),
+                     "{0}[{1}:{1}]".format(x_in, 21 + offset),
                      "{0}[{1}:{1}]".format(x_out, 21 + 1 + offset)]
-        in_index_list.add(6 + offset)
-        in_index_list.add(15 + offset)
-        in_index_list.add(13 + offset)
-        in_index_list.add(21 + offset)
-        out_index_list.add(6 + 1 + offset)
-        out_index_list.add(15 + 1 + offset)
-        out_index_list.add(13 + 1 + offset)
-        out_index_list.add(21 + 1 + offset)
+
         return variables
 
     def getFormatString(self):
@@ -134,24 +124,18 @@ class katan48(AbstractCipher):
                 self.setupKatanRound(stp_file, xa[i], xb[i], x_f_out[i], x_a_out[i], xa[i + 1],
                                      w[i], wordsize, i, offset)
             # Em
-            in_index_list = set()
-            out_index_list = set()
-            for i in range(switch_rounds):
-                command += self.and_bct(
-                    self.small_vari(xa[em_start_search_num], ya[em_end_search_num], in_index_list, out_index_list, -i),
-                    self.ax_box_2, 2)
-                command += self.and_bct(
-                    self.big_vari(xa[em_start_search_num], ya[em_end_search_num], in_index_list, out_index_list, -i),
-                    self.ax_box, 4)
-                in_index_list.add(18 - i)
-                in_index_list.add(18 - i - 1)
-                in_index_list.add(47 - i)
-                in_index_list.add(48 - i - 1)
 
-            for i in range(47):
-                if i not in in_index_list:
-                    command += "ASSERT({0}[{2}:{2}]={1}[{3}:{3}]);\n".format(
-                        ya[em_end_search_num], xa[em_start_search_num], i + 1, i)
+            for i in range(em_start_search_num, em_end_search_num):
+                self.setupKatanRound(
+                    stp_file, xa[i], xb[i], x_f_out[i], x_a_out[i], xa[i + 1], w[i], wordsize, i, offset, True
+                )
+                self.setupKatanRound(
+                    stp_file, ya[i + 1], yb[i + 1], y_f_out[i], y_a_out[i], ya[i + 2], w[i], wordsize, i, offset, True
+                )
+                command += self.and_bct(
+                    self.small_vari(xa[i], ya[i + 1], -0))
+                command += self.and_bct(
+                    self.big_vari(xa[i], ya[i + 1], -0))
 
             # E1
             for i in range(e1_start_search_num, e1_end_search_num):
@@ -161,15 +145,14 @@ class katan48(AbstractCipher):
             # Modify start_round to start from different positions
 
             # No all zero characteristic
-            # stpcommands.assertNonZero(stp_file, xa, wordsize)
             if switch_start_round == -1:
                 stpcommands.assertNonZero(stp_file, xa, wordsize)
             else:
                 # use BCT
                 stpcommands.assertNonZero(
-                    stp_file, xa[e0_start_search_num:e0_end_search_num], wordsize)
+                    stp_file, [xa[0]], wordsize)
                 stpcommands.assertNonZero(
-                    stp_file, ya[e1_start_search_num:e1_end_search_num], wordsize)
+                    stp_file, [ya[rounds]], wordsize)
 
             # Iterative characteristics only
             # Input difference = Output difference
@@ -337,7 +320,9 @@ class katan48(AbstractCipher):
         return
 
     def pre_handle(self, param):
-        characters = param["bbbb"]
+        if 'countered_trails' not in param:
+            return ""
+        characters = param["countered_trails"]
         if len(characters) == 0:
             return ""
         r = param["rounds"]
@@ -359,17 +344,17 @@ class katan48(AbstractCipher):
         command += "=0x000000000000));\n"
         return command
 
-    def and_bct(self, variables, non_part, input_size):
+    def and_bct(self, variables):
         if len(variables) == 4:
             return "ASSERT(BVXOR({0}&{1}, {2}&{3})=0bin0);\n".format(
-                variables[0], variables[3], variables[1], variables[2]
+                variables[0], variables[1], variables[2], variables[3]
             )
         else:
             str1 = "BVXOR({0}&{1}, {2}&{3})".format(
-                variables[0], variables[5], variables[1], variables[4]
+                variables[0], variables[1], variables[2], variables[3]
             )
             str2 = "BVXOR({0}&{1}, {2}&{3})".format(
-                variables[2], variables[7], variables[3], variables[6]
+                variables[4], variables[5], variables[6], variables[7]
             )
             return "ASSERT(BVXOR({0}, {1})=0bin0);\n".format(str1, str2)
 
@@ -390,9 +375,12 @@ class katan48(AbstractCipher):
         input_diff = trails_data[0][0]
 
         # output diff
-        output_diff = trails_data[r][2]
+        output_diff = trails_data[r][1]
 
         # switch diff
         switch_input_diff = trails_data[switch_start_round][0]
-        switch_output_diff = trails_data[switch_start_round + switch_rounds][2]
+        switch_output_diff = trails_data[switch_start_round + switch_rounds][1]
         return input_diff, switch_input_diff, switch_output_diff, output_diff
+
+    def get_cluster_params(self, new_parameter, new_p, prob):
+        print()

@@ -53,7 +53,8 @@ class katan64(AbstractCipher):
         """
         Returns the print format.
         """
-        return ['Xa', 'Xb', 'Xc', 'Ya', 'Yb', 'Yc', 'XO', 'XG', 'YO', 'YG', 'w']
+        # return ['Xa', 'Xb', 'Xc', 'Ya', 'Yb', 'Yc', 'XO', 'XG', 'YO', 'YG', 'w']
+        return ['Xa', 'Ya', 'w']
 
     def createSTP(self, stp_filename, parameters):
         """
@@ -117,24 +118,26 @@ class katan64(AbstractCipher):
             stpcommands.setupVariables(stp_file, w, wordsize)
 
             stpcommands.setupWeightComputation(stp_file, weight, w, wordsize)
-
+            command = ""
             # E0
             for i in range(e0_start_search_num, e0_end_search_num):
                 self.setupKatanRound(stp_file, xa[i], xb[i], xc[i], xg[i], xo[i], xa[i + 1],
                                      w[i], wordsize, i, offset)
             # Em
             for i in range(em_start_search_num, em_end_search_num):
-                command = stpcommands.and_bct(self.small_vari(xa[i], xb[i + 1]), self.ax_box_2, 2)
-                command += stpcommands.and_bct(self.small_vari(xb[i], xc[i + 1]), self.ax_box_2, 2)
-                command += stpcommands.and_bct(self.small_vari(xc[i], ya[i + 1]), self.ax_box_2, 2)
-                command += stpcommands.and_bct(self.big_vari(xa[i], xb[i + 1]), self.ax_box, 4)
-                command += stpcommands.and_bct(self.big_vari(xb[i], xc[i + 1]), self.ax_box, 4)
-                command += stpcommands.and_bct(self.big_vari(xc[i], ya[i + 1]), self.ax_box, 4)
-                stp_file.write(command)
-                self.setupKatanRound(stp_file, xa[i], xb[i], xc[i], xg[i], xo[i], xa[i + 1],
-                                     w[i], wordsize, i, offset)
-                self.setupKatanRound(stp_file, ya[i], yb[i], yc[i], yg[i], yo[i], ya[i + 1],
-                                     w[i], wordsize, i, offset)
+                self.setupKatanRound(
+                    stp_file, xa[i], xb[i], xc[i], xg[i], xo[i], xa[i + 1],
+                    w[i], wordsize, i, offset, True
+                )
+                self.setupKatanRound(
+                    stp_file, ya[i + 1], yb[i + 1], yc[i + 1], yg[i + 1], yo[i + 1], ya[i + 2],
+                    w[i], wordsize, i, offset, True
+                )
+                command += self.and_bct(
+                    self.small_vari(xa[i], ya[i + 1]))
+                command += self.and_bct(
+                    self.big_vari(xa[i], ya[i + 1]))
+
             # E1
             for i in range(e1_start_search_num, e1_end_search_num):
                 self.setupKatanRound(stp_file, ya[i], yb[i], yc[i], yg[i], yo[i], ya[i + 1],
@@ -159,6 +162,7 @@ class katan64(AbstractCipher):
             for char in parameters["blockedCharacteristics"]:
                 stpcommands.blockCharacteristic(stp_file, char, wordsize)
 
+            stp_file.write(command)
             stpcommands.setupQuery(stp_file)
 
         return
@@ -334,3 +338,44 @@ class katan64(AbstractCipher):
 
         stp_file.write(command)
         return
+
+    def and_bct(self, variables):
+        if len(variables) == 4:
+            return "ASSERT(BVXOR({0}&{1}, {2}&{3})=0bin0);\n".format(
+                variables[0], variables[1], variables[2], variables[3]
+            )
+        else:
+            str1 = "BVXOR({0}&{1}, {2}&{3})".format(
+                variables[0], variables[1], variables[2], variables[3]
+            )
+            str2 = "BVXOR({0}&{1}, {2}&{3})".format(
+                variables[4], variables[5], variables[6], variables[7]
+            )
+            return "ASSERT(BVXOR({0}, {1})=0bin0);\n".format(str1, str2)
+
+    def get_diff_hex(self, parameters, characteristics):
+        switch_start_round = parameters['switchStartRound']
+        switch_rounds = parameters['switchRounds']
+        r = parameters['rounds']
+        trails_data = characteristics.getData()
+        # input diff
+        input_diff = trails_data[0][0]
+
+        # output diff
+        output_diff = trails_data[r][1]
+
+        # switch diff
+        switch_input_diff = trails_data[switch_start_round][0]
+        switch_output_diff = trails_data[switch_start_round + switch_rounds][1]
+        return input_diff, switch_input_diff, switch_output_diff, output_diff
+
+    def get_cluster_params(self, new_parameter, new_p, prob):
+        print()
+
+    def create_cluster_parameters(self, parameters, characteristics):
+        r = parameters['rounds']
+        trails_data = characteristics.getData()
+        input_diff = trails_data[0][0]
+        output_diff = trails_data[r][1]
+        parameters["fixedVariables"]["Xa0"] = input_diff
+        parameters["fixedVariables"]["Ya{}".format(r)] = output_diff

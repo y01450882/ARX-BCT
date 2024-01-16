@@ -34,3 +34,7 @@ class AbstractCipher(object, metaclass=ABCMeta):
     @abstractmethod
     def get_diff_hex(self, parameters, characteristics):
         pass
+
+    # @abstractmethod
+    # def get_cluster_params(self, parameters):
+    #     pass

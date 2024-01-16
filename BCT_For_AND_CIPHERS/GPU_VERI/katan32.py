@@ -29,71 +29,74 @@ IR = (
 
 
 @cuda.jit
-def num2bits(num, bit_length, temp_list):
-    bits = temp_list
-    for i in range(bit_length):
-        bits[i] = num & 1
-        num >>= 1
-
-
-@cuda.jit
-def bits2num(bits):
-    num = 0
-    for i, x in enumerate(bits):
-        assert x == 0 or x == 1
-        num += (x << i)
-    bits[0] = num
-
-
-@cuda.jit
 def enc(plaintext, sub_keys, ir, from_round, to_round, temp_list):
-    for i in range(len(temp_list)):
-        temp_list[i] = 0
-    num2bits(plaintext, 32, temp_list)
-
-    for r in range(from_round, to_round + 1):
+    for r in range(from_round, to_round):
         k_a = sub_keys[2 * r]
         k_b = sub_keys[2 * r + 1]
 
-        f_a = temp_list[12 + 19] ^ temp_list[7 + 19] ^ (temp_list[8 + 19] & temp_list[5 + 19]) ^ k_a
-        if ir[r]:
-            f_a ^= temp_list[3 + 19]
+        y1 = plaintext >> 18 & 0x00000001
+        y2 = plaintext >> 7 & 0x00000001
+        y3 = plaintext >> 12 & 0x00000001
+        y4 = plaintext >> 10 & 0x00000001
+        y5 = plaintext >> 8 & 0x00000001
+        y6 = plaintext >> 3 & 0x00000001
 
-        f_b = temp_list[18] ^ temp_list[7] ^ (temp_list[12] & temp_list[10]) ^ (temp_list[8] & temp_list[3]) ^ k_b
+        x1 = plaintext >> (12 + 19) & 0x00000001
+        x2 = plaintext >> (7 + 19) & 0x00000001
+        x3 = plaintext >> (8 + 19) & 0x00000001
+        x4 = plaintext >> (5 + 19) & 0x00000001
+        x5 = plaintext >> (3 + 19) & 0x00000001
 
-        for i in range(len(temp_list) - 1, 0, -1):
-            temp_list[i] = temp_list[i - 1]
+        f_a = x1 ^ x2 ^ (x3 & x4) ^ (x5 & ir[r]) ^ k_a
+        f_b = y1 ^ y2 ^ (y3 & y4) ^ (y5 & y6) ^ k_b
 
-        temp_list[0] = f_a
-        temp_list[19] = f_b
+        plaintext <<= 1
+        if f_a == 0:
+            plaintext &= 0xFFFFFFFE
+        else:
+            plaintext |= f_a
+        if f_b == 0:
+            plaintext &= 0xFFF7FFFF
+        else:
+            plaintext |= (f_b << 19)
 
-    bits2num(temp_list)
+    temp_list[0] = plaintext
 
 
 @cuda.jit
 def dec(ciphertext, sub_keys, ir, from_round, to_round, temp_list):
-    for i in range(len(temp_list)):
-        temp_list[i] = 0
-    num2bits(ciphertext, 32, temp_list)
-
-    for r in range(from_round, to_round - 1, -1):
+    for rr in range(from_round, to_round):
+        r = to_round - 1 - rr
         k_a = sub_keys[2 * r]
         k_b = sub_keys[2 * r + 1]
 
-        f_a = temp_list[0] ^ temp_list[7 + 1 + 19] ^ (temp_list[8 + 1 + 19] & temp_list[5 + 1 + 19]) ^ k_a
-        if ir[r]:
-            f_a ^= temp_list[3 + 1 + 19]
+        y0 = ciphertext & 0x00000001
+        y2 = ciphertext >> (7 + 1) & 0x00000001
+        y3 = ciphertext >> (12 + 1) & 0x00000001
+        y4 = ciphertext >> (10 + 1) & 0x00000001
+        y5 = ciphertext >> (8 + 1) & 0x00000001
+        y6 = ciphertext >> (3 + 1) & 0x00000001
 
-        f_b = temp_list[0 + 19] ^ temp_list[7 + 1] ^ (temp_list[12 + 1] & temp_list[10 + 1]) ^ (
-                temp_list[8 + 1] & temp_list[3 + 1]) ^ k_b
+        x0 = ciphertext >> 19 & 0x00000001
+        x2 = ciphertext >> (7 + 19 + 1) & 0x00000001
+        x3 = ciphertext >> (8 + 19 + 1) & 0x00000001
+        x4 = ciphertext >> (5 + 19 + 1) & 0x00000001
+        x5 = ciphertext >> (3 + 19 + 1) & 0x00000001
 
-        for i in range(len(temp_list) - 1):
-            temp_list[i] = temp_list[i + 1]
+        f_a = y0 ^ x2 ^ (x3 & x4) ^ (x5 & ir[r]) ^ k_a
+        f_b = x0 ^ y2 ^ (y3 & y4) ^ (y5 & y6) ^ k_b
 
-        temp_list[18] = f_b
-        temp_list[31] = f_a
+        ciphertext >>= 1
+        if f_a == 0:
+            ciphertext &= 0x7FFFFFFF
+        else:
+            ciphertext |= (f_a << 31)
+        if f_b == 0:
+            ciphertext &= 0xFFFBFFFF
+        else:
+            ciphertext |= (f_b << 18)
 
-    bits2num(temp_list)
+    temp_list[0] = ciphertext
 
 
 @cuda.jit
@@ -121,13 +124,13 @@ def katan_task(keys, input_diff, output_diff, rounds, result_collector, offset, 
         c3 = c1 ^ output_diff
         c4 = c2 ^ output_diff
 
-        dec(c3, keys, ir, rounds, offset, used_list)
+        dec(c3, keys, ir, offset, rounds, used_list)
         x3 = used_list[0]
 
-        dec(c4, keys, ir, rounds, offset, used_list)
+        dec(c4, keys, ir, offset, rounds, used_list)
         x4 = used_list[0]
         if x3 ^ x4 == input_diff:
-            res += 1
+            res += 2
     result_collector[thread_index] = res
 
 
@@ -187,7 +190,7 @@ def cpu_task():
         start_time = time.time()
         input_diff = dd[0]
         output_diff = dd[3]
-        rounds = dd[4] - 1
+        rounds = dd[4]
         boomerang_weight = dd[5]
         rectangle_weight = dd[6]
 
@@ -205,6 +208,7 @@ def cpu_task():
         katan_task[blocks_in_per_grid, threads_in_per_block](cuda_sub_keys, input_diff, output_diff, rounds,
                                                              cuda_result, 0, ir,
                                                              cuda_temp_list)
+
         res = numpy.zeros((1,), dtype=numpy.uint64)[0]
         for r in cuda_result:
             res += r

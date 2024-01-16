@@ -6,7 +6,7 @@ Created on Apr 3, 2014
 
 from parser import parsesolveroutput
 from config import (PATH_STP, PATH_BOOLECTOR, PATH_CRYPTOMINISAT, MAX_WEIGHT,
-                    MAX_CHARACTERISTICS, MULTI_THREADS)
+                    MAX_CHARACTERISTICS, MULTI_THREADS, USE_SHARP, PATH_SHARP)
 
 import subprocess
 import random
@@ -21,7 +21,7 @@ def computeProbabilityOfDifferentials(cipher, parameters):
     summing up all characteristics of a specific weight using
     a SAT solver.
     """
-    rnd_string_tmp = '%030x' % random.randrange(16**30)
+    rnd_string_tmp = '%030x' % random.randrange(16 ** 30)
     diff_prob = 0
     characteristics_found = 0
     sat_logfile = "tmp/satlog{}.tmp".format(rnd_string_tmp)
@@ -29,7 +29,7 @@ def computeProbabilityOfDifferentials(cipher, parameters):
     start_time = time.time()
 
     while not reachedTimelimit(start_time, parameters["timelimit"]) and \
-        parameters["sweight"] < MAX_WEIGHT:
+            parameters["sweight"] < MAX_WEIGHT:
 
         if os.path.isfile(sat_logfile):
             os.remove(sat_logfile)
@@ -66,7 +66,7 @@ def computeProbabilityOfDifferentials(cipher, parameters):
         diff_prob += math.pow(2, -parameters["sweight"]) * solutions
         characteristics_found += solutions
         if diff_prob > 0.0:
-            #print("\tSolutions: {}".format(solutions))
+            # print("\tSolutions: {}".format(solutions))
             print("\tTrails found: {}".format(characteristics_found))
             print("\tCurrent Probability: " + str(math.log(diff_prob, 2)))
             print("\tTime: {}s".format(round(time.time() - start_time, 2)))
@@ -88,16 +88,16 @@ def findBestConstants(cipher, parameters):
     for beta in range(0, wordsize):
         for alpha in range(0, wordsize):
             weight = 0
-            #Filter cases where alpha = beta
+            # Filter cases where alpha = beta
             if alpha == beta:
                 constantMinWeights.append(0)
                 continue
-            #Filter symmetric cases
+            # Filter symmetric cases
             if beta > alpha:
                 constantMinWeights.append(constantMinWeights[alpha * wordsize +
                                                              beta])
                 continue
-            #Filter gcd(alpha - beta, n) != 1 cases
+            # Filter gcd(alpha - beta, n) != 1 cases
             if math.gcd(alpha - beta, wordsize) != 1:
                 constantMinWeights.append(1)
                 continue
@@ -125,6 +125,7 @@ def findBestConstants(cipher, parameters):
     print(constantMinWeights)
     return constantMinWeights
 
+
 def findMinWeightCharacteristic(cipher, parameters):
     """
     Find a characteristic of minimal weight for the cipher
@@ -140,7 +141,7 @@ def findMinWeightCharacteristic(cipher, parameters):
     start_time = time.time()
 
     while not reachedTimelimit(start_time, parameters["timelimit"]) and \
-        parameters["sweight"] < MAX_WEIGHT:
+            parameters["sweight"] < MAX_WEIGHT:
 
         print("Weight: {} Time: {}s".format(parameters["sweight"],
                                             round(time.time() - start_time, 2)))
@@ -182,11 +183,11 @@ def findMinWeightCharacteristic(cipher, parameters):
                     dot_file.write(characteristic.getDOTString())
                     dot_file.write("}")
                 print("Wrote .dot to {}".format(parameters["dot"]))
-                
+
             if parameters["latex"]:
                 with open(parameters["latex"], "w") as tex_file:
                     tex_file.write(characteristic.getTexString())
-                print("Wrote .tex to {}".format(parameters["latex"]))                
+                print("Wrote .tex to {}".format(parameters["latex"]))
             break
         parameters["sweight"] += 1
     return parameters["sweight"]
@@ -197,12 +198,12 @@ def findAllCharacteristics(cipher, parameters):
     Outputs all characteristics of a specific weight by excluding
     solutions iteratively.
     """
-    rnd_string_tmp = '%030x' % random.randrange(16**30)
+    rnd_string_tmp = '%030x' % random.randrange(16 ** 30)
     start_time = time.time()
     total_num_characteristics = 0
 
     while not reachedTimelimit(start_time, parameters["timelimit"]) and \
-          parameters["sweight"] != parameters["endweight"]:
+            parameters["sweight"] != parameters["endweight"]:
         stp_file = "tmp/{}{}.stp".format(cipher.name, rnd_string_tmp)
 
         # Start STP TODO: add boolector support
@@ -244,15 +245,16 @@ def findAllCharacteristics(cipher, parameters):
     if parameters["dot"]:
         with open(parameters["dot"], "w") as dot_file:
             dot_file.write("strict digraph graphname {")
-            #dot_file.write("graph [ splines = false ]")
+            # dot_file.write("graph [ splines = false ]")
             dot_graph = ""
             for characteristic in parameters["blockedCharacteristics"]:
                 dot_graph += characteristic.getDOTString()
             dot_file.write(dot_graph)
             dot_file.write("}")
         print("Wrote .dot to {}".format(parameters["dot"]))
-        
+
     return
+
 
 def searchCharacteristics(cipher, parameters):
     """
@@ -266,6 +268,7 @@ def searchCharacteristics(cipher, parameters):
         parameters["rounds"] = parameters["rounds"] + 1
     return
 
+
 def reachedTimelimit(start_time, timelimit):
     """
     Return True if the timelimit was reached.
@@ -274,6 +277,7 @@ def reachedTimelimit(start_time, timelimit):
         print("Reached the time limit of {} seconds".format(timelimit))
         return True
     return False
+
 
 def countSolutionsLogfile(logfile_path):
     """
@@ -287,6 +291,7 @@ def countSolutionsLogfile(logfile_path):
         return logged_solutions
     return -1
 
+
 def startSATsolver(stp_file):
     """
     Return CryptoMiniSat process started with the given stp_file.
@@ -296,22 +301,36 @@ def startSATsolver(stp_file):
                              stp_file, "--CVC", "--disable-simplifications"])
 
     # Find the number of solutions with the SAT solver
-    sat_params = [PATH_CRYPTOMINISAT, "--maxsol", str(MAX_CHARACTERISTICS),
-                  "--verb", "0", "-s", "0", "--threads", str(MULTI_THREADS), "output_0.cnf"]
-
+    if USE_SHARP == 0:
+        sat_params = [PATH_CRYPTOMINISAT,
+                      "--maxsol", str(MAX_CHARACTERISTICS),
+                      "--verb", "0",
+                      "-s", "0",
+                      "--threads", str(MULTI_THREADS),
+                      "output_0.cnf"]
+    else:
+        sat_params = [PATH_SHARP,
+                      "-decot", "1",
+                      "-decow", "100",
+                      "-tmpdir", "./tmp",
+                      "-cs", "3500",
+                      "output_0.cnf"
+                      ]
+        # subprocess.call(sat_params)
     sat_process = subprocess.Popen(sat_params, stderr=subprocess.PIPE,
                                    stdout=subprocess.PIPE)
-
     return sat_process
+
 
 def solveSTP(stp_file):
     """
     Returns the solution for the given SMT problem using STP.
     """
-    stp_parameters = [PATH_STP, stp_file, "--CVC", "--threads", str(MULTI_THREADS)]
+    stp_parameters = [PATH_STP, "--cryptominisat", "--threads", str(MULTI_THREADS), "--CVC", stp_file, "--disable-simplifications"]
     result = subprocess.check_output(stp_parameters)
 
     return result.decode("utf-8")
+
 
 def solveBoolector(stp_file):
     """
@@ -329,6 +348,7 @@ def solveBoolector(stp_file):
     result = boolector_process.communicate(input=input_file)[0]
 
     return result.decode("utf-8")
+
 
 def foundSolution(solver_result):
     """
